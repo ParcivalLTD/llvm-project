@@ -1413,6 +1413,18 @@ Instruction *InstCombinerImpl::visitLShr(BinaryOperator &I) {
   const APInt *C;
   unsigned BitWidth = Ty->getScalarSizeInBits();
 
+  // lshr C1, (sub X, C2) -> lshr (C1 << C2), X
+  {
+    const APInt *C1, *C2;
+    Value *X;
+    if (match(Op0, m_APInt(C1)) && match(Op1, m_Sub(m_Value(X), m_APInt(C2)))) {
+      if (C2->ult(BitWidth) && C1->countLeadingZeros() >= C2->getZExtValue()) {
+        APInt NewC1 = C1->shl(*C2);
+        return BinaryOperator::CreateLShr(ConstantInt::get(Ty, NewC1), X);
+      }
+    }
+  }
+
   // lshr 1, X --> zext (X == 0)
   if (match(Op0, m_One()))
     return new ZExtInst(Builder.CreateIsNull(Op1), Ty);
